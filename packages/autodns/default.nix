@@ -2,5 +2,5 @@
 
 writers.writePython3Bin "autodns" {
   libraries = with python3Packages; [ librouteros cloudflare ];
-  flakeIgnore = [ "E" ];
+  flakeIgnore = [ "E" "W" ];
 } (builtins.readFile ./main.py)
