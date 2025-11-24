@@ -1,12 +1,16 @@
-from CloudFlare import CloudFlare
+from cloudflare import Cloudflare, APIConnectionError, APIStatusError
 from librouteros import connect
 from librouteros.exceptions import TrapError
 from dataclasses import dataclass
 from time import sleep
 from os import environ
 from logging import basicConfig, getLogger
+from typing import Dict, Optional
 
-basicConfig(level=environ.get("LOG_LEVEL", "INFO"))
+basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=environ.get("LOG_LEVEL", "INFO")
+)
 logger = getLogger(__name__)
 
 
@@ -26,96 +30,162 @@ CLOUDFLARE_API_TOKEN = environ["CLOUDFLARE_API_TOKEN"]
 CLOUDFLARE_ZONE_ID = environ["CLOUDFLARE_ZONE_ID"]
 
 # Initialize Cloudflare client
-cf = CloudFlare(token=CLOUDFLARE_API_TOKEN)
+client = Cloudflare(api_token=CLOUDFLARE_API_TOKEN)
 
 
-# Connect to MikroTik Router
-def get_connected_devices() -> list[Device]:
+def get_connected_devices() -> Optional[list[Device]]:
+    """
+    Connects to MikroTik and returns a list of devices.
+    Returns None if connection fails, to distinguish between "No devices" and "Error".
+    """
     try:
         api = connect(username=MIKROTIK_USERNAME, password=MIKROTIK_PASSWORD, host=MIKROTIK_HOST)
         devices = []
         device_names = []
-        for device in api.path("/ip/dhcp-server/lease"):
+        
+        # Fetch leases
+        leases = api.path("/ip/dhcp-server/lease")
+        
+        for device in leases:
+            # Filter specific server if needed
             if device.get("server") != "dhcp2_devices":
                 continue
-            if device.get("host-name") is None:
+            
+            # Validation
+            if not device.get("host-name") or not device.get("expires-after"):
                 continue
-            if device.get("expires-after") is None:
-                continue
+                
             name = device["host-name"].lower().strip()
+            
+            # deduplicate names (prefer first found)
             if name in device_names:
                 continue
+            
             device_names.append(name)
             devices.append(Device(name=name, address=device["address"]))
+            
+        api.close()
         return devices
-    except TrapError:
-        logger.exception("Failed to connect to MikroTik")
-        return []
+
+    except (TrapError, Exception):
+        logger.exception("Failed to connect to MikroTik or retrieve leases")
+        return None
 
 
 def update_cloudflare_dns(devices: list[Device]):
-    existing_records = cf.zones.dns_records.get(CLOUDFLARE_ZONE_ID, params={"per_page": 500})
-    existing_hostnames = {rec["name"]: rec for rec in existing_records if rec["type"] == "A"}
+    """
+    Fetches current Cloudflare state and updates/creates records where necessary.
+    """
+    logger.info("Starting Cloudflare synchronization...")
+    try:
+        # Fetch all A records for the zone
+        existing_records_page = client.dns.records.list(
+            zone_id=CLOUDFLARE_ZONE_ID, 
+            type="A", 
+            per_page=500
+        )
+        
+        existing_hostnames = {rec.name: rec for rec in existing_records_page}
+        updates_count = 0
 
-    for device in devices:
-        record_name = f"{device.name}.lo.f0rth.space"
-        record_ip = device.address
-        logger.debug(f"Processing {record_name}")
+        for device in devices:
+            record_name = f"{device.name}.lo.f0rth.space"
+            record_ip = device.address
 
-        if record_name in existing_hostnames:
-            existing_record = existing_hostnames[record_name]
-            if existing_record["content"] != record_ip:
-                comment = existing_record.get("comment")
-                if not isinstance(comment, str):
-                    logger.debug(f"Skipping DNS record {record_name}, reason: No comment")
+            if record_name in existing_hostnames:
+                existing_record = existing_hostnames[record_name]
+                
+                # 1. Check IP equality
+                if existing_record.content == record_ip:
+                    continue # Completely synonymous, skip
+
+                # 2. Safety Check: Managed Comment
+                comment = existing_record.comment
+                if not comment or not comment.startswith("@managed"):
+                    logger.debug(f"Skipping {record_name}: Not managed by script")
                     continue
-                if not comment.startswith("@managed"):
-                    logger.debug(f"Skipping DNS record {record_name}, reason: Not managed")
-                    continue
-                if existing_record["content"] == record_ip:
-                    logger.debug(f"DNS record {record_name} not changed")
-                # Update the record if the IP has changed
-                cf.zones.dns_records.put(
-                    CLOUDFLARE_ZONE_ID,
-                    existing_record["id"],
-                    data={
-                        "type": "A",
-                        "name": record_name,
-                        "content": record_ip,
-                        "ttl": 300,
-                        "comment": "@managed by auto-update script",
-                    },
-                )
-                logger.info(f"Updated DNS record: {record_name} -> {record_ip}")
+                
+                # 3. Update Record
+                try:
+                    client.dns.records.edit(
+                        dns_record_id=existing_record.id,
+                        zone_id=CLOUDFLARE_ZONE_ID,
+                        type="A",
+                        name=record_name,
+                        content=record_ip,
+                        ttl=300,
+                        comment="@managed by auto-update script",
+                    )
+                    logger.info(f"UPDATED: {record_name} -> {record_ip}")
+                    updates_count += 1
+                except APIStatusError as e:
+                    logger.error(f"Failed to update {record_name}: {e}")
+
+            else:
+                # 4. Create New Record
+                try:
+                    client.dns.records.create(
+                        zone_id=CLOUDFLARE_ZONE_ID,
+                        type="A",
+                        name=record_name,
+                        content=record_ip,
+                        ttl=300,
+                        comment="@managed by auto-update script",
+                    )
+                    logger.info(f"CREATED: {record_name} -> {record_ip}")
+                    updates_count += 1
+                except APIStatusError as e:
+                    logger.error(f"Failed to create {record_name}: {e}")
+
+        if updates_count == 0:
+            logger.info("Cloudflare check complete: No actual DNS changes needed.")
         else:
-            # Create a new record if it doesn't exist
-            try:
-                cf.zones.dns_records.post(
-                    CLOUDFLARE_ZONE_ID,
-                    data={
-                        "type": "A",
-                        "name": record_name,
-                        "content": record_ip,
-                        "ttl": 300,
-                        "comment": "@managed by auto-update script",
-                    },
-                )
-                logger.info(f"Created DNS record: {record_name} -> {record_ip}")
-            except Exception:
-                logger.exception(f"Failed to create DNS record: {record_name} -> {record_ip}")
+            logger.info(f"Cloudflare check complete: {updates_count} records modified.")
+
+    except (APIConnectionError, APIStatusError) as e:
+        logger.error(f"Cloudflare API Error: {e}")
+    except Exception:
+        logger.exception("Unexpected error during Cloudflare update")
 
 
 def main():
+    # Cache to store the previous state of {hostname: ip}
+    last_known_state: Dict[str, str] = {}
+    
+    logger.info("Starting DHCP DNS Sync Service...")
+
     while True:
         try:
             devices = get_connected_devices()
-            if devices:
-                update_cloudflare_dns(devices)
+
+            # Handle connection error (None) or empty list
+            if devices is None:
+                logger.warning("Could not fetch devices from MikroTik. Retrying in 60s...")
             else:
-                logger.warn("No devices found.")
+                # Convert current devices list to a dict for comparison
+                current_state = {d.name: d.address for d in devices}
+
+                # Logic: Only hit Cloudflare API if the MikroTik list looks different 
+                # from the last successful run.
+                if current_state != last_known_state:
+                    if not last_known_state:
+                        logger.info("Initial state loaded (or state reset). Syncing...")
+                    else:
+                        logger.info("Detected change in local network. Syncing...")
+                    
+                    # Perform the API operations
+                    update_cloudflare_dns(devices)
+                    
+                    # Update the cache
+                    last_known_state = current_state
+                else:
+                    logger.debug("No changes in DHCP leases. Skipping Cloudflare sync.")
+
         except Exception:
-            logger.exception("An error occurred")
-        sleep(600)
+            logger.exception("Critical error in main loop")
+        
+        # Wait 60 seconds before next check
+        sleep(60)
 
 
 if __name__ == "__main__":
