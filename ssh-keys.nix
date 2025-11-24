@@ -1,11 +1,13 @@
 {
   cofob = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsSKOtKRM9+bvCs6iioOrcayMdsdwaQN/lJAQJkXE+w cofob@yubi"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFg9JjdQH3neby5z1IWB8xlMzWtfnaWvTJX82+p+Qapp cofob@twinkpad2"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF7CLYytkk6jmtr0LXaIb6CtnpaL5YX3HKXKCAxQyhvn cofob@katana"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExfGCQE5rcchNNv7IVc5mIn1A6QGZ/eLrDIW0mJaXTm cofob@mac"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFg9JjdQH3neby5z1IWB8xlMzWtfnaWvTJX82+p+Qapp cofob@twinkpad2-deprecated"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF7CLYytkk6jmtr0LXaIb6CtnpaL5YX3HKXKCAxQyhvn cofob@katana-deprecated"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExfGCQE5rcchNNv7IVc5mIn1A6QGZ/eLrDIW0mJaXTm cofob@mac-air-m3-deprecated"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN6b75A2O7+oEzlGFMtWp7HcicyThJZAgQTNs/QzmP3M cofob@mac-air-m4"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILwLbr2pWwVTio+ta0o3miV8BkxlRM8ulwUWboPgPT0T cofob@pixel-termius"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG/9imD3CsThK+gD/j202AwS8dmpWqiCaQGNWeWl8oxY cofob@mac-mini"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOWYsCmUbXvyaxTT0Xmgx4zufLNZfolsujLLC5hYV32h cofob@deus-personal"
   ];
   dettlaff = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAM0EtUB3ZtA1Y37qiwNUNAbEbF6sn9ZVg4AW++SmuOu"

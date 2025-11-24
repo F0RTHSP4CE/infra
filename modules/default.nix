@@ -2,7 +2,7 @@
 
 {
   imports = [
-    home-manager.nixosModule
+    home-manager.nixosModules.home-manager
     agenix.nixosModules.default
 
     ./acme.nix

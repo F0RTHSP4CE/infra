@@ -10,7 +10,7 @@ in {
   home-manager.users.tar = import "${self}/home/tar";
   home-manager.users.mike = import "${self}/home/mike";
   home-manager.users.anatoly = import "${self}/home/anatoly";
-  home-manager.users.skywinder= import "${self}/home/skywinder";
+  home-manager.users.skywinder = import "${self}/home/skywinder";
 
   age.secrets.password-root.file = "${self}/secrets/passwords/root.age";
   age.secrets.password-cofob.file = "${self}/secrets/passwords/cofob.age";
@@ -58,7 +58,8 @@ in {
         description = "Anatoly Ivanov";
         extraGroups = [ "wheel" ];
         uid = 1005;
-        hashedPasswordFile = config.age.secrets.password-root.path; # TODO: change
+        hashedPasswordFile =
+          config.age.secrets.password-root.path; # TODO: change
         openssh.authorizedKeys.keys = user-keys.anatoly;
       };
       skywinder = {
@@ -66,7 +67,8 @@ in {
         description = "Petr @skywinder";
         extraGroups = [ "wheel" ];
         uid = 1006;
-        hashedPasswordFile = config.age.secrets.password-root.path; # TODO: change
+        hashedPasswordFile =
+          config.age.secrets.password-root.path; # TODO: change
         openssh.authorizedKeys.keys = user-keys.skywinder;
       };
     };
