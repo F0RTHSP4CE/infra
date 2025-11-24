@@ -86,9 +86,8 @@
           ci-cache = pkgs.stdenv.mkDerivation {
             name = "ci-cache";
             version = "0.1.0";
-            buildInputs = ([
-              pkgs.zerotierone # zerotier is unfree and not built in nixpkgs cache
-            ] ++ builtins.attrValues (import ./overlay.nix pkgs attrs));
+            buildInputs =
+              ([ ] ++ builtins.attrValues (import ./overlay.nix pkgs attrs));
             phases = [ "installPhase" ];
             installPhase = "echo 'ci-cache' > $out";
           };
